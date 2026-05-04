@@ -1,0 +1,84 @@
+{
+  "name": "copilot-compact",
+  "displayName": "Copilot Compact",
+  "description": "Rewrite Copilot/OAI-compatible conversation compaction requests from /responses to /responses/compact.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.92.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotCompact.showOutput",
+        "title": "Copilot Compact: Show Output"
+      },
+      {
+        "command": "copilotCompact.enable",
+        "title": "Copilot Compact: Enable"
+      },
+      {
+        "command": "copilotCompact.disable",
+        "title": "Copilot Compact: Disable"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot Compact",
+      "properties": {
+        "copilotCompact.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable rewriting detected conversation-compaction requests from /responses to /responses/compact."
+        },
+        "copilotCompact.targetHosts": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional host allow-list. Empty means all hosts. Example: [\"newapi.boyweb.net\", \"openai.boyweb.net\"]."
+        },
+        "copilotCompact.compactPathSuffix": {
+          "type": "string",
+          "default": "compact",
+          "description": "Path segment appended to /responses for compact requests. Default rewrites /v1/responses to /v1/responses/compact."
+        },
+        "copilotCompact.rewriteMode": {
+          "type": "string",
+          "default": "compactOnly",
+          "enum": [
+            "compactOnly",
+            "allResponses"
+          ],
+          "enumDescriptions": [
+            "Only rewrite requests that match Copilot's conversation-summary compaction prompt.",
+            "Rewrite every POST request whose URL ends with /responses. Use only for debugging."
+          ],
+          "description": "Controls which /responses requests are rewritten."
+        },
+        "copilotCompact.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "off",
+            "info",
+            "debug"
+          ],
+          "description": "Output verbosity. Logs never include request bodies or API keys."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce package --no-dependencies",
+    "test": "node ./test/compactDetector.test.js"
+  }
+}
