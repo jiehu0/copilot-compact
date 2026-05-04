@@ -3,8 +3,31 @@
   "displayName": "Copilot Compact（压缩请求改写）",
   "description": "将 Copilot/OAI 兼容的会话压缩请求从 /responses 改写到 /responses/compact。",
   "version": "0.0.1",
-  "publisher": "local",
+  "publisher": "jiehu-dev-2026",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jiehu0/copilot-compact.git"
+  },
+  "homepage": "https://github.com/jiehu0/copilot-compact#readme",
+  "bugs": {
+    "url": "https://github.com/jiehu0/copilot-compact/issues"
+  },
+  "keywords": [
+    "copilot",
+    "copilot-chat",
+    "openai",
+    "responses",
+    "responses-api",
+    "compact",
+    "compaction",
+    "vscode-extension"
+  ],
+  "galleryBanner": {
+    "color": "#0D1117",
+    "theme": "dark"
+  },
+  "pricing": "Free",
   "engines": {
     "vscode": "^1.92.0"
   },
