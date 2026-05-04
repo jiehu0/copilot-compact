@@ -4,6 +4,7 @@ const assert = require("assert");
 const {
   buildModelsUrl,
   chooseCompactModel,
+  chooseCompactRequestModel,
   extractModelIds,
   stripReasoningSuffix,
 } = require("../src/modelResolver");
@@ -34,12 +35,48 @@ assert.strictEqual(
   "gpt-5.5-openai-compact"
 );
 
+assert.deepStrictEqual(
+  chooseCompactRequestModel("gpt-5.5-xhigh", [
+    "gpt-5.4-openai-compact",
+    "gpt-5.5-openai-compact",
+  ]),
+  {
+    requestModel: "gpt-5.5",
+    matchedModel: "gpt-5.5-openai-compact",
+    reason: "matched-backend-compact-model",
+  }
+);
+
 assert.strictEqual(
   chooseCompactModel("gpt-5.4-xhigh", [
     "gpt-5.5-openai-compact",
     "gpt-5.4-openai-compact",
   ]),
   "gpt-5.4-openai-compact"
+);
+
+assert.deepStrictEqual(
+  chooseCompactRequestModel("gpt-5.4-xhigh", [
+    "gpt-5.5-openai-compact",
+    "gpt-5.4-openai-compact",
+  ]),
+  {
+    requestModel: "gpt-5.4",
+    matchedModel: "gpt-5.4-openai-compact",
+    reason: "matched-backend-compact-model",
+  }
+);
+
+assert.deepStrictEqual(
+  chooseCompactRequestModel("claude-sonnet-4.5-high", [
+    "claude-sonnet-4.5-openai-compact",
+    "gpt-5.5-openai-compact",
+  ]),
+  {
+    requestModel: "claude-sonnet-4.5",
+    matchedModel: "claude-sonnet-4.5-openai-compact",
+    reason: "matched-backend-compact-model",
+  }
 );
 
 console.log("modelResolver tests passed");

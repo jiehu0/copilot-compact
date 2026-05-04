@@ -39,7 +39,7 @@ function extractModelIds(payload) {
 }
 
 /**
- * Pick the best backend compact model for an original model.
+ * Pick the best backend compact deployment for an original model.
  *
  * Example:
  * - original: gpt-5.5-xhigh
@@ -97,6 +97,33 @@ function chooseCompactModel(originalModel, modelIds) {
 }
 
 /**
+ * Choose the model name that should be sent to /responses/compact.
+ *
+ * new-api compact channels append their own "-openai-compact" suffix internally,
+ * so if /models contains "gpt-5.5-openai-compact", the request body should use
+ * "gpt-5.5" rather than "gpt-5.5-openai-compact".
+ *
+ * @param {string} originalModel
+ * @param {string[]} modelIds
+ * @returns {{ requestModel: string, matchedModel: string, reason: string }}
+ */
+function chooseCompactRequestModel(originalModel, modelIds) {
+  const matchedModel = chooseCompactModel(originalModel, modelIds);
+  if (matchedModel) {
+    return {
+      requestModel: stripCompactDecorations(normalize(matchedModel)),
+      matchedModel,
+      reason: "matched-backend-compact-model",
+    };
+  }
+  return {
+    requestModel: stripReasoningSuffix(normalize(originalModel)),
+    matchedModel: "",
+    reason: "fallback-strip-reasoning-suffix",
+  };
+}
+
+/**
  * @param {string} model
  * @returns {string}
  */
@@ -131,6 +158,8 @@ function normalize(value) {
 module.exports = {
   buildModelsUrl,
   chooseCompactModel,
+  chooseCompactRequestModel,
   extractModelIds,
+  stripCompactDecorations,
   stripReasoningSuffix,
 };

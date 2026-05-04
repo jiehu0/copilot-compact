@@ -7,9 +7,13 @@ const {
 } = require("./compactDetector");
 const {
   buildModelsUrl,
-  chooseCompactModel,
+  chooseCompactRequestModel,
   extractModelIds,
 } = require("./modelResolver");
+const {
+  adaptCompactResponseForCopilot,
+  replaceCompactionMarkersInBody,
+} = require("./compactionAdapter");
 
 const PATCH_SYMBOL = Symbol.for("copilotCompact.fetchPatch");
 const modelsCache = new Map();
@@ -20,6 +24,7 @@ const modelsCache = new Map();
  * @property {string[]} targetHosts
  * @property {string} compactPathSuffix
  * @property {string} compactModelOverride
+ * @property {string} responsesCompactModel
  * @property {"compactOnly" | "allResponses"} rewriteMode
  * @property {"off" | "info" | "debug"} logLevel
  */
@@ -53,9 +58,12 @@ function installFetchPatch(options) {
     const state = g[PATCH_SYMBOL];
     const activeOptions = state?.options || options;
     try {
-      const rewrite = await prepareRewrite(input, init, activeOptions);
+      const normalized = await prepareInputWithStoredCompactions(input, init, activeOptions);
+      const effectiveInput = normalized.input;
+      const effectiveInit = normalized.init;
+      const rewrite = await prepareRewrite(effectiveInput, effectiveInit, activeOptions);
       if (rewrite) {
-        const finalRequest = await prepareFinalCompactRequest(rewrite, input, init, originalFetch, activeOptions);
+        const finalRequest = await prepareFinalCompactRequest(rewrite, effectiveInput, effectiveInit, originalFetch, activeOptions);
         activeOptions.logger.info("Rewriting compact request", {
           from: redactUrl(rewrite.oldUrl),
           to: redactUrl(rewrite.newUrl),
@@ -63,7 +71,14 @@ function installFetchPatch(options) {
           score: rewrite.detection.score,
           reasons: rewrite.detection.reasons,
         });
-        return originalFetch.call(this, finalRequest.input, finalRequest.init);
+        const response = await originalFetch.call(this, finalRequest.input, finalRequest.init);
+        return adaptCompactResponseForCopilot(response, activeOptions.logger);
+      }
+      if (normalized.changed) {
+        activeOptions.logger.info("Expanding stored compact marker(s) in request.", {
+          replacementCount: normalized.replacementCount,
+        });
+        return originalFetch.call(this, effectiveInput, effectiveInit);
       }
     } catch (error) {
       activeOptions.logger.warn?.("Failed to inspect fetch request; sending original request.", {
@@ -85,6 +100,41 @@ function installFetchPatch(options) {
     options,
   };
   options.logger.debug("Fetch patch installed.");
+}
+
+/**
+ * @param {unknown} input
+ * @param {RequestInit | undefined} init
+ * @param {PatchOptions} options
+ * @returns {Promise<{ input: unknown, init: RequestInit | undefined, changed: boolean, replacementCount: number }>}
+ */
+async function prepareInputWithStoredCompactions(input, init, options) {
+  const cfg = options.getConfig();
+  if (!cfg.enabled) {
+    return { input, init, changed: false, replacementCount: 0 };
+  }
+  const method = extractMethod(input, init);
+  if (method !== "POST") {
+    return { input, init, changed: false, replacementCount: 0 };
+  }
+  const url = extractUrl(input);
+  if (!url || !isResponsesEndpoint(url, { targetHosts: cfg.targetHosts })) {
+    return { input, init, changed: false, replacementCount: 0 };
+  }
+  const bodyText = await extractBodyText(input, init);
+  if (!bodyText) {
+    return { input, init, changed: false, replacementCount: 0 };
+  }
+  const replaced = replaceCompactionMarkersInBody(bodyText, options.logger);
+  if (!replaced.changed) {
+    return { input, init, changed: false, replacementCount: 0 };
+  }
+  return {
+    input,
+    init: rewriteFetchInitWithBody(init, replaced.bodyText),
+    changed: true,
+    replacementCount: replaced.replacementCount,
+  };
 }
 
 function uninstallFetchPatch() {
@@ -123,15 +173,17 @@ async function prepareRewrite(input, init, options) {
 
   const bodyText = await extractBodyText(input, init);
   if (!bodyText) {
-    options.logger.debug("Skipping /responses request with unreadable body.", { url: redactUrl(oldUrl) });
+      options.logger.debug?.("Skipping /responses request with unreadable body.", { url: redactUrl(oldUrl) });
     return null;
   }
 
   let detection = { isCompact: true, score: 999, reasons: ["allResponses-mode"] };
   if (cfg.rewriteMode !== "allResponses") {
-    detection = detectCompactRequest(bodyText);
+    detection = detectCompactRequest(bodyText, {
+      requestInitiator: extractRequestInitiator(input, init),
+    });
     if (!detection.isCompact) {
-      options.logger.debug("Leaving normal /responses request unchanged.", {
+      options.logger.debug?.("Leaving normal /responses request unchanged.", {
         url: redactUrl(oldUrl),
         score: detection.score,
         reasons: detection.reasons,
@@ -169,13 +221,16 @@ async function prepareFinalCompactRequest(rewrite, input, init, originalFetch, o
     const body = JSON.parse(bodyText);
     const originalModel = typeof body.model === "string" ? body.model : "";
     if (originalModel) {
-      const compactModel = await resolveCompactModel(originalModel, rewrite.oldUrl, input, init, originalFetch, options);
-      if (compactModel && compactModel !== originalModel) {
-        body.model = compactModel;
-        bodyText = JSON.stringify(body);
-        modelChange = `${originalModel} -> ${compactModel}`;
+      const compactResolution = await resolveCompactModel(originalModel, rewrite.oldUrl, input, init, originalFetch, options);
+      if (compactResolution.requestModel && compactResolution.requestModel !== originalModel) {
+        body.model = compactResolution.requestModel;
+        modelChange = `${originalModel} -> ${compactResolution.requestModel}`;
+        if (compactResolution.matchedModel) {
+          modelChange += ` (matched ${compactResolution.matchedModel})`;
+        }
       }
     }
+    bodyText = JSON.stringify(cleanCompactRequestBody(body));
   } catch (error) {
     options.logger.warn?.("Failed to rewrite compact model; keeping original model.", {
       error: error instanceof Error ? error.message : String(error),
@@ -196,25 +251,59 @@ async function prepareFinalCompactRequest(rewrite, input, init, originalFetch, o
  * @param {RequestInit | undefined} init
  * @param {typeof fetch} originalFetch
  * @param {PatchOptions} options
- * @returns {Promise<string>}
+ * @returns {Promise<{ requestModel: string, matchedModel: string, reason: string }>}
  */
 async function resolveCompactModel(originalModel, responsesUrl, input, init, originalFetch, options) {
   const cfg = options.getConfig();
-  if (typeof cfg.compactModelOverride === "string" && cfg.compactModelOverride.trim()) {
-    return cfg.compactModelOverride.trim();
+  const explicit = firstNonEmptyString(cfg.responsesCompactModel, cfg.compactModelOverride);
+  if (explicit) {
+    return {
+      requestModel: explicit,
+      matchedModel: "",
+      reason: "explicit-config",
+    };
   }
 
   const modelsUrl = buildModelsUrl(responsesUrl);
   const modelIds = await fetchModelIds(modelsUrl, input, init, originalFetch, options);
-  const compactModel = chooseCompactModel(originalModel, modelIds);
-  if (!compactModel) {
-    options.logger.warn?.("No matching compact model found; keeping original model.", {
+  const resolution = chooseCompactRequestModel(originalModel, modelIds);
+  if (!resolution.matchedModel) {
+    options.logger.warn?.("No matching compact model found; using base model for compact request.", {
       originalModel,
+      requestModel: resolution.requestModel,
       modelsUrl: redactUrl(modelsUrl),
       compactCandidates: modelIds.filter((id) => id.toLowerCase().includes("compact")).slice(0, 20),
     });
   }
-  return compactModel;
+  return resolution;
+}
+
+/**
+ * @param {Record<string, unknown>} body
+ * @returns {Record<string, unknown>}
+ */
+function cleanCompactRequestBody(body) {
+  const allowedKeys = new Set(["model", "input", "instructions", "previous_response_id"]);
+  const cleaned = {};
+  for (const key of allowedKeys) {
+    if (body[key] !== undefined) {
+      cleaned[key] = body[key];
+    }
+  }
+  return cleaned;
+}
+
+/**
+ * @param  {...unknown} values
+ * @returns {string}
+ */
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
 }
 
 /**
@@ -260,7 +349,7 @@ async function fetchModelIds(modelsUrl, input, init, originalFetch, options) {
   const payload = await response.json();
   const modelIds = extractModelIds(payload);
   modelsCache.set(cacheKey, { ts: Date.now(), modelIds });
-  options.logger.debug("Fetched backend models.", {
+  options.logger.debug?.("Fetched backend models.", {
     modelsUrl: redactUrl(modelsUrl),
     count: modelIds.length,
     compactCandidates: modelIds.filter((id) => id.toLowerCase().includes("compact")).slice(0, 20),
@@ -359,6 +448,20 @@ function extractHeaders(input, init) {
 /**
  * @param {unknown} input
  * @param {RequestInit | undefined} init
+ * @returns {string}
+ */
+function extractRequestInitiator(input, init) {
+  const anyInit = init || {};
+  if (typeof anyInit.requestInitiator === "string") {
+    return anyInit.requestInitiator;
+  }
+  const headers = extractHeaders(input, init);
+  return headers.get("x-request-initiator") || headers.get("x-vscode-request-initiator") || "";
+}
+
+/**
+ * @param {unknown} input
+ * @param {RequestInit | undefined} init
  * @returns {Promise<string>}
  */
 async function extractBodyText(input, init) {
@@ -426,6 +529,9 @@ function redactUrl(rawUrl) {
 module.exports = {
   installFetchPatch,
   uninstallFetchPatch,
+  prepareInputWithStoredCompactions,
   prepareRewrite,
   prepareFinalCompactRequest,
+  cleanCompactRequestBody,
+  resolveCompactModel,
 };

@@ -9,11 +9,15 @@ const DEFAULT_COMPACT_SUFFIX = "compact";
  * @property {string[]} reasons
  */
 
+const SUMMARY_KEYWORDS = ["summary", "summarization", "summarize", "compact", "compaction", "archive transcript"];
+const HISTORY_KEYWORDS = ["conversation", "chat history", "conversation history", "transcript", "history"];
+
 /**
  * @param {unknown} value
+ * @param {{ requestInitiator?: string, messageCount?: number }} [context]
  * @returns {CompactDetection}
  */
-function detectCompactRequest(value) {
+function detectCompactRequest(value, context = {}) {
   const body = typeof value === "string" ? safeJsonParse(value) : value;
   const reasons = [];
   let score = 0;
@@ -27,10 +31,36 @@ function detectCompactRequest(value) {
   const inputText = collectInputText(request.input).join("\n");
   const allText = `${instructions}\n${inputText}`.toLowerCase();
   const hasTools = Array.isArray(request.tools) && request.tools.length > 0;
+  const messageCount = typeof context.messageCount === "number"
+    ? context.messageCount
+    : Array.isArray(request.input)
+      ? request.input.length
+      : 0;
+  const requestInitiator = normalizeText(
+    context.requestInitiator ||
+      request.requestInitiator ||
+      (request.options && typeof request.options === "object" ? request.options.requestInitiator : "") ||
+      (request.metadata && typeof request.metadata === "object" ? request.metadata.requestInitiator : "")
+  ).toLowerCase();
+  const hasSummaryKeyword = hasAny(allText, SUMMARY_KEYWORDS);
+  const hasHistoryKeyword = hasAny(allText, HISTORY_KEYWORDS);
 
   if (Array.isArray(request.input)) {
     score += 1;
     reasons.push("responses-input-array");
+  }
+
+  if (messageCount > 0) {
+    reasons.push(`message-count-${messageCount}`);
+    if (messageCount <= 6) {
+      score += 1;
+      reasons.push("small-message-count");
+    }
+  }
+
+  if (requestInitiator.includes("github.copilot-chat") || requestInitiator.includes("copilot")) {
+    score += 2;
+    reasons.push(`request-initiator-${requestInitiator}`);
   }
 
   if (request.stream === true) {
@@ -41,6 +71,16 @@ function detectCompactRequest(value) {
   if (!hasTools) {
     score += 1;
     reasons.push("no-tools");
+  }
+
+  if (hasSummaryKeyword) {
+    score += 2;
+    reasons.push("summary-keyword");
+  }
+
+  if (hasHistoryKeyword) {
+    score += 2;
+    reasons.push("history-keyword");
   }
 
   if (instructions) {
@@ -82,8 +122,9 @@ function detectCompactRequest(value) {
   }
 
   const hasSummarySignal = reasons.some((r) => r.includes("summary") || r.includes("conversation-history"));
+  const hasCoreSignals = hasSummaryKeyword && hasHistoryKeyword;
   return {
-    isCompact: !hasTools && score >= 7 && hasSummarySignal,
+    isCompact: !hasTools && hasCoreSignals && score >= 7 && hasSummarySignal,
     score,
     reasons,
   };
@@ -177,6 +218,15 @@ function rewriteResponsesUrl(rawUrl, options = {}) {
  */
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * @param {string} text
+ * @param {string[]} keywords
+ * @returns {boolean}
+ */
+function hasAny(text, keywords) {
+  return keywords.some((keyword) => text.includes(keyword));
 }
 
 /**

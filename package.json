@@ -54,7 +54,12 @@
         "copilotCompact.compactModelOverride": {
           "type": "string",
           "default": "",
-          "description": "Optional explicit model name for /responses/compact. Empty means auto-fetch /models and choose a matching compact model, e.g. gpt-5.5-xhigh -> gpt-5.5-openai-compact."
+          "description": "Deprecated alias of copilotCompact.responsesCompactModel."
+        },
+        "copilotCompact.responsesCompactModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional explicit model name sent to /responses/compact. Empty means auto-fetch /models and choose a base model for the matched compact channel, e.g. gpt-5.5-xhigh -> gpt-5.5 for backend channel gpt-5.5-openai-compact."
         },
         "copilotCompact.rewriteMode": {
           "type": "string",
@@ -84,6 +89,6 @@
   },
   "scripts": {
     "package": "npx --yes @vscode/vsce package --no-dependencies",
-    "test": "node ./test/compactDetector.test.js && node ./test/modelResolver.test.js"
+    "test": "node ./test/compactDetector.test.js && node ./test/modelResolver.test.js && node ./test/compactionAdapter.test.js && node ./test/fetchPatch.test.js"
   }
 }

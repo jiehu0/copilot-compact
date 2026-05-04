@@ -37,7 +37,7 @@ This extension detects Copilot's conversation-history compaction prompt and rewr
 
 - Detects Copilot-style conversation compaction requests.
 - Rewrites matched `POST /responses` requests to `POST /responses/compact`.
-- Optionally resolves the matching compact model from `/models`, for example `gpt-5.5-xhigh` -> `gpt-5.5-openai-compact`.
+- Optionally resolves the matching compact channel from `/models`, for example `gpt-5.5-xhigh` -> request model `gpt-5.5` for backend channel `gpt-5.5-openai-compact`.
 - Leaves normal chat, tool-use, and regular Responses API requests unchanged.
 - Supports an optional host allow-list.
 - Provides an optional debug output channel.
@@ -45,7 +45,7 @@ This extension detects Copilot's conversation-history compaction prompt and rewr
 
 - 识别 Copilot 风格的会话压缩请求。
 - 将匹配到的 `POST /responses` 改写为 `POST /responses/compact`。
-- 可自动从 `/models` 解析匹配的 compact 模型，例如 `gpt-5.5-xhigh` -> `gpt-5.5-openai-compact`。
+- 可自动从 `/models` 解析匹配的 compact 通道，例如 `gpt-5.5-xhigh` -> 请求模型 `gpt-5.5`，对应后端通道 `gpt-5.5-openai-compact`。
 - 普通聊天、工具调用和常规 Responses API 请求保持不变。
 - 支持可选的目标域名白名单。
 - 支持可选的调试输出通道。
@@ -129,6 +129,7 @@ Open VS Code settings and search for `Copilot Compact`, or edit `settings.json`:
   "copilotCompact.enabled": true,
   "copilotCompact.targetHosts": [],
   "copilotCompact.compactPathSuffix": "compact",
+  "copilotCompact.responsesCompactModel": "",
   "copilotCompact.compactModelOverride": "",
   "copilotCompact.rewriteMode": "compactOnly",
   "copilotCompact.logLevel": "info"
@@ -140,9 +141,38 @@ Open VS Code settings and search for `Copilot Compact`, or edit `settings.json`:
 | `copilotCompact.enabled` | `true` | Enable or disable request rewriting. / 启用或禁用请求改写。 |
 | `copilotCompact.targetHosts` | `[]` | Optional host allow-list. Empty means all hosts. Example: `["newapi.example.com"]`. / 可选目标域名白名单；为空表示匹配所有域名。 |
 | `copilotCompact.compactPathSuffix` | `"compact"` | Path segment appended after `/responses`. / 追加到 `/responses` 后的路径片段。 |
-| `copilotCompact.compactModelOverride` | `""` | Optional explicit compact model. Empty means auto-fetch `/models` with the original request auth and choose a matching compact model, e.g. `gpt-5.5-xhigh` -> `gpt-5.5-openai-compact`. / 可选的显式 compact 模型；为空时会使用原请求认证信息自动请求 `/models` 并选择匹配的 compact 模型。 |
+| `copilotCompact.responsesCompactModel` | `""` | Optional explicit model sent to `/responses/compact`, e.g. `gpt-5.5`. Keep it empty for generic per-model matching. Empty means auto-fetch `/models`, match a compact channel, and send the base model. / 可选的 compact 请求模型，例如 `gpt-5.5`；如果你会切换多个模型，建议保持为空以启用通用自动匹配。为空时自动请求 `/models`，匹配 compact 通道后发送基础模型。 |
+| `copilotCompact.compactModelOverride` | `""` | Deprecated alias of `responsesCompactModel`. / `responsesCompactModel` 的兼容别名，后续不建议使用。 |
 | `copilotCompact.rewriteMode` | `"compactOnly"` | `compactOnly` rewrites only detected compaction requests. `allResponses` rewrites every `POST /responses` request and should only be used for debugging. / `compactOnly` 只改写识别到的压缩请求；`allResponses` 会改写所有 `POST /responses` 请求，仅建议调试时使用。 |
 | `copilotCompact.logLevel` | `"info"` | `off`, `info`, or `debug`. / 可选 `off`、`info` 或 `debug`。 |
+
+## Rewrite rules / 请求改写规则
+
+The extension only considers `POST .../responses` requests. A request is treated as a Copilot compaction request when it has no tools and its prompt/body contains summary + conversation-history signals such as `summary`, `summarization`, `compact`, `conversation history`, `transcript`, or `history`.
+
+扩展只处理 `POST .../responses`。当请求不带 `tools`，并且提示词/请求体中同时出现总结和对话历史相关信号时，才认为它是 Copilot 压缩请求，例如 `summary`、`summarization`、`compact`、`conversation history`、`transcript`、`history`。
+
+When matched:
+
+命中后：
+
+1. Endpoint: `/v1/responses` -> `/v1/responses/compact`
+2. Body cleanup: keep only `model`, `input`, `instructions`, `previous_response_id`
+3. Remove regular chat-only fields such as `stream`, `tools`, `tool_choice`, `prompt_cache_key`
+4. Model normalization:
+   - If `copilotCompact.responsesCompactModel` is set, use it directly. This is a fixed override and is not recommended when switching between model families.
+   - Otherwise fetch `/models` with the original request auth.
+   - Match compact channels like `gpt-5.5-openai-compact` or `gpt-5.4-openai-compact`.
+   - Send the matched base model, for example `gpt-5.5` or `gpt-5.4`, to `/responses/compact`, because new-api appends `-openai-compact` internally.
+
+1. Endpoint：`/v1/responses` -> `/v1/responses/compact`
+2. 请求体清理：只保留 `model`、`input`、`instructions`、`previous_response_id`
+3. 删除普通聊天字段：`stream`、`tools`、`tool_choice`、`prompt_cache_key`
+4. 模型归一：
+   - 如果设置了 `copilotCompact.responsesCompactModel`，直接使用该值。它是固定覆盖值；如果你会在多个模型之间切换，不建议设置。
+   - 否则使用原请求认证信息请求 `/models`。
+   - 匹配类似 `gpt-5.5-openai-compact` 或 `gpt-5.4-openai-compact` 的 compact 通道。
+   - 发送匹配到的基础模型，例如 `gpt-5.5` 或 `gpt-5.4` 到 `/responses/compact`，因为 new-api 会在内部追加 `-openai-compact`。
 
 ## Usage / 使用
 
