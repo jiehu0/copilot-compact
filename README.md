@@ -5,11 +5,17 @@
 
 Rewrite VS Code Copilot/OAI-compatible conversation compaction requests from `/responses` to `/responses/compact`.
 
-`Copilot Compact` is a small VS Code extension for users who route Copilot Chat or OAI-compatible providers through a Responses-compatible API gateway that supports the binary compact endpoint.
+将 VS Code Copilot 或 OAI 兼容服务的会话压缩请求从 `/responses` 改写到 `/responses/compact`。
 
-## Why
+`Copilot Compact` is a lightweight VS Code extension for users who route Copilot Chat or OAI-compatible providers through a Responses-compatible API gateway that supports the binary compact endpoint.
+
+`Copilot Compact` 是一个轻量级 VS Code 扩展，适用于将 Copilot Chat 或 OAI 兼容服务接入到支持 Responses API 和二进制 compact 端点的网关用户。
+
+## Why / 为什么
 
 Some Copilot/OAI-compatible flows summarize long conversations by sending a normal request to:
+
+某些 Copilot/OAI 兼容流程会通过普通端点总结长对话：
 
 ```text
 /v1/responses
@@ -17,50 +23,76 @@ Some Copilot/OAI-compatible flows summarize long conversations by sending a norm
 
 For providers that support the compact endpoint, the more efficient route is:
 
+如果服务端支持 compact 端点，更高效的路径是：
+
 ```text
 /v1/responses/compact
 ```
 
 This extension detects Copilot's conversation-history compaction prompt and rewrites only that request. Normal chat requests continue to use `/responses`.
 
-## Features
+本扩展会识别 Copilot 的会话历史压缩提示词，并且只改写这类请求；普通聊天请求仍然走 `/responses`。
+
+## Features / 功能
 
 - Detects Copilot-style conversation compaction requests.
 - Rewrites matched `POST /responses` requests to `POST /responses/compact`.
+- Optionally resolves the matching compact model from `/models`, for example `gpt-5.5-xhigh` -> `gpt-5.5-openai-compact`.
 - Leaves normal chat, tool-use, and regular Responses API requests unchanged.
-- Optional host allow-list.
-- Optional debug output channel.
-- No request body or API key is printed in logs.
+- Supports an optional host allow-list.
+- Provides an optional debug output channel.
+- Does not print request bodies or API keys in logs.
 
-## Confirmed compaction request pattern
+- 识别 Copilot 风格的会话压缩请求。
+- 将匹配到的 `POST /responses` 改写为 `POST /responses/compact`。
+- 可自动从 `/models` 解析匹配的 compact 模型，例如 `gpt-5.5-xhigh` -> `gpt-5.5-openai-compact`。
+- 普通聊天、工具调用和常规 Responses API 请求保持不变。
+- 支持可选的目标域名白名单。
+- 支持可选的调试输出通道。
+- 日志不会打印请求体或 API Key。
+
+## Confirmed compaction request pattern / 已确认的压缩请求特征
 
 The extension identifies compaction requests using known Copilot/OAI-compatible request-body patterns:
 
+扩展会根据已知的 Copilot/OAI 兼容请求体特征识别压缩请求：
+
 - `instructions` contains text like:
+- `instructions` 包含类似文本：
   - `create a comprehensive, detailed summary of the entire conversation`
 - `input` contains text like:
+- `input` 包含类似文本：
   - `Summarize the conversation history so far`
 - the request usually has no `tools`
+- 这类请求通常不包含 `tools`
 
 When these signals are present, the URL is rewritten from:
+
+当这些信号出现时，URL 会从：
 
 ```text
 https://example.com/v1/responses
 ```
 
-to:
+rewritten to:
+
+改写为：
 
 ```text
 https://example.com/v1/responses/compact
 ```
 
-## Installation
+## Installation / 安装
 
-### Option 1: Install from GitHub Release
+### Option 1: Install from GitHub Release / 方式一：从 GitHub Release 安装
 
 1. Open the [Releases](https://github.com/jiehu0/copilot-compact/releases) page.
 2. Download the latest `.vsix` file.
 3. Install it:
+
+1. 打开 [Releases](https://github.com/jiehu0/copilot-compact/releases) 页面。
+2. 下载最新的 `.vsix` 文件。
+3. 安装扩展：
 
 ```bash
 code --install-extension copilot-compact-v0.0.1.vsix
@@ -68,9 +100,13 @@ code --install-extension copilot-compact-v0.0.1.vsix
 
 Then reload VS Code.
 
-### Option 2: Install from source
+然后重载 VS Code。
+
+### Option 2: Install from source / 方式二：从源码安装
 
 Clone the repository and symlink it into your local VS Code extensions directory:
+
+克隆仓库，并将它软链接到本地 VS Code 扩展目录：
 
 ```bash
 git clone https://github.com/jiehu0/copilot-compact.git
@@ -80,48 +116,70 @@ ln -s "$(pwd)" ~/.vscode/extensions/copilot-compact-0.0.1
 
 Then reload VS Code.
 
-## Configuration
+然后重载 VS Code。
+
+## Configuration / 配置
 
 Open VS Code settings and search for `Copilot Compact`, or edit `settings.json`:
+
+打开 VS Code 设置并搜索 `Copilot Compact`，或直接编辑 `settings.json`：
 
 ```json
 {
   "copilotCompact.enabled": true,
   "copilotCompact.targetHosts": [],
+  "copilotCompact.compactPathSuffix": "compact",
+  "copilotCompact.compactModelOverride": "",
   "copilotCompact.rewriteMode": "compactOnly",
   "copilotCompact.logLevel": "info"
 }
 ```
 
-| Setting | Default | Description |
+| Setting / 配置项 | Default / 默认值 | Description / 说明 |
 | --- | --- | --- |
-| `copilotCompact.enabled` | `true` | Enable or disable request rewriting. |
-| `copilotCompact.targetHosts` | `[]` | Optional host allow-list. Empty means all hosts. Example: `["newapi.example.com"]`. |
-| `copilotCompact.compactPathSuffix` | `"compact"` | Path segment appended after `/responses`. |
-| `copilotCompact.rewriteMode` | `"compactOnly"` | `compactOnly` rewrites only detected compaction requests. `allResponses` rewrites every `POST /responses` request and should only be used for debugging. |
-| `copilotCompact.logLevel` | `"info"` | `off`, `info`, or `debug`. |
+| `copilotCompact.enabled` | `true` | Enable or disable request rewriting. / 启用或禁用请求改写。 |
+| `copilotCompact.targetHosts` | `[]` | Optional host allow-list. Empty means all hosts. Example: `["newapi.example.com"]`. / 可选目标域名白名单；为空表示匹配所有域名。 |
+| `copilotCompact.compactPathSuffix` | `"compact"` | Path segment appended after `/responses`. / 追加到 `/responses` 后的路径片段。 |
+| `copilotCompact.compactModelOverride` | `""` | Optional explicit compact model. Empty means auto-fetch `/models` with the original request auth and choose a matching compact model, e.g. `gpt-5.5-xhigh` -> `gpt-5.5-openai-compact`. / 可选的显式 compact 模型；为空时会使用原请求认证信息自动请求 `/models` 并选择匹配的 compact 模型。 |
+| `copilotCompact.rewriteMode` | `"compactOnly"` | `compactOnly` rewrites only detected compaction requests. `allResponses` rewrites every `POST /responses` request and should only be used for debugging. / `compactOnly` 只改写识别到的压缩请求；`allResponses` 会改写所有 `POST /responses` 请求，仅建议调试时使用。 |
+| `copilotCompact.logLevel` | `"info"` | `off`, `info`, or `debug`. / 可选 `off`、`info` 或 `debug`。 |
 
-## Usage
+## Usage / 使用
 
 After installation, the extension activates automatically.
 
+安装后扩展会自动激活。
+
 To inspect rewrite activity:
+
+查看请求改写情况：
 
 1. Open the command palette.
 2. Run `Copilot Compact: Show Output`.
 3. Trigger Copilot/OAI-compatible conversation compaction.
 4. Look for `Rewriting compact request`.
 
-> Note: Some providers log the request URL before calling `fetch`, so their own logs may still show `/responses`. Use this extension's output, server access logs, or network capture to confirm the actual rewritten URL.
+1. 打开命令面板。
+2. 运行 `Copilot Compact: Show Output`。
+3. 触发 Copilot/OAI 兼容的会话压缩。
+4. 查找 `Rewriting compact request` 日志。
 
-## Development
+> Note: Some providers log the request URL before calling `fetch`, so their own logs may still show `/responses`. Use this extension's output, server access logs, or network capture to confirm the actual rewritten URL.
+>
+> 注意：某些 provider 会在调用 `fetch` 前记录请求 URL，因此它们自己的日志中可能仍显示 `/responses`。请以本扩展输出、服务端访问日志或网络抓包来确认实际改写后的 URL。
+
+## Development / 开发
 
 Requirements:
 
+环境要求：
+
 - VS Code
-- Node.js 20 or newer
+- Node.js 20 or newer / Node.js 20 或更新版本
 
 Run tests:
+
+运行测试：
 
 ```bash
 npm test
@@ -129,22 +187,49 @@ npm test
 
 Package locally:
 
+本地打包：
+
 ```bash
 npm run package
 ```
 
 Debug in VS Code:
 
+在 VS Code 中调试：
+
 1. Open this repository in VS Code.
 2. Press `F5` to launch an Extension Development Host.
-3. Use Copilot/OAI-compatible provider in the new window.
+3. Use a Copilot/OAI-compatible provider in the new window.
 4. Check `Copilot Compact: Show Output`.
 
-## Release
+1. 在 VS Code 中打开本仓库。
+2. 按 `F5` 启动 Extension Development Host。
+3. 在新窗口中使用 Copilot/OAI 兼容 provider。
+4. 查看 `Copilot Compact: Show Output`。
+
+## Local deployment / 本地部署
+
+For source-based local deployment, keep a symlink from this repository to the VS Code extensions directory:
+
+源码方式本地部署时，请保持本仓库到 VS Code 扩展目录的软链接：
+
+```bash
+ln -s "$(pwd)" ~/.vscode/extensions/copilot-compact-0.0.1
+```
+
+If the link already exists, pull or edit this repository and reload VS Code to use the latest code.
+
+如果软链接已经存在，更新本仓库后重载 VS Code 即可使用最新代码。
+
+## Release / 发布
 
 This repository includes a GitHub Actions workflow that packages the extension on version tags.
 
+本仓库包含 GitHub Actions 工作流，会在推送版本标签时自动打包扩展。
+
 Create a release:
+
+创建发布：
 
 ```bash
 git tag v0.0.1
@@ -153,22 +238,38 @@ git push origin v0.0.1
 
 GitHub Actions will:
 
+GitHub Actions 会：
+
 1. run tests,
 2. package the `.vsix`,
 3. create a GitHub Release,
 4. upload the `.vsix` as a release asset.
 
-## Limitations
+1. 运行测试；
+2. 打包 `.vsix`；
+3. 创建 GitHub Release；
+4. 将 `.vsix` 上传为 Release 资产。
+
+## Limitations / 限制
 
 This extension patches `globalThis.fetch` inside the VS Code extension host. It works for extensions/providers that send requests through the extension host's JavaScript `fetch`.
 
+本扩展会在 VS Code extension host 内部 patch `globalThis.fetch`。它适用于通过 extension host 的 JavaScript `fetch` 发起请求的扩展或 provider。
+
 It cannot intercept requests sent from:
+
+它无法拦截以下来源的请求：
 
 - separate native binaries,
 - separate Node.js processes,
 - external proxies,
 - providers that do not use the VS Code extension host `fetch`.
 
-## License
+- 独立原生二进制程序；
+- 独立 Node.js 进程；
+- 外部代理；
+- 不使用 VS Code extension host `fetch` 的 provider。
+
+## License / 许可证
 
 [MIT](LICENSE)

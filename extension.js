@@ -56,6 +56,7 @@ function readConfig() {
     enabled: cfg.get("enabled", true),
     targetHosts: cfg.get("targetHosts", []),
     compactPathSuffix: cfg.get("compactPathSuffix", "compact"),
+    compactModelOverride: cfg.get("compactModelOverride", ""),
     rewriteMode: cfg.get("rewriteMode", "compactOnly"),
     logLevel: cfg.get("logLevel", "info"),
   };

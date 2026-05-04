@@ -51,6 +51,11 @@
           "default": "compact",
           "description": "Path segment appended to /responses for compact requests. Default rewrites /v1/responses to /v1/responses/compact."
         },
+        "copilotCompact.compactModelOverride": {
+          "type": "string",
+          "default": "",
+          "description": "Optional explicit model name for /responses/compact. Empty means auto-fetch /models and choose a matching compact model, e.g. gpt-5.5-xhigh -> gpt-5.5-openai-compact."
+        },
         "copilotCompact.rewriteMode": {
           "type": "string",
           "default": "compactOnly",
@@ -79,6 +84,6 @@
   },
   "scripts": {
     "package": "npx --yes @vscode/vsce package --no-dependencies",
-    "test": "node ./test/compactDetector.test.js"
+    "test": "node ./test/compactDetector.test.js && node ./test/modelResolver.test.js"
   }
 }
