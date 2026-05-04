@@ -1,7 +1,7 @@
 {
   "name": "copilot-compact",
-  "displayName": "Copilot Compact",
-  "description": "Rewrite Copilot/OAI-compatible conversation compaction requests from /responses to /responses/compact.",
+  "displayName": "Copilot Compact（压缩请求改写）",
+  "description": "将 Copilot/OAI 兼容的会话压缩请求从 /responses 改写到 /responses/compact。",
   "version": "0.0.1",
   "publisher": "local",
   "license": "MIT",
@@ -19,24 +19,24 @@
     "commands": [
       {
         "command": "copilotCompact.showOutput",
-        "title": "Copilot Compact: Show Output"
+        "title": "Copilot Compact：显示输出日志"
       },
       {
         "command": "copilotCompact.enable",
-        "title": "Copilot Compact: Enable"
+        "title": "Copilot Compact：启用"
       },
       {
         "command": "copilotCompact.disable",
-        "title": "Copilot Compact: Disable"
+        "title": "Copilot Compact：禁用"
       }
     ],
     "configuration": {
-      "title": "Copilot Compact",
+      "title": "Copilot Compact（压缩请求改写）",
       "properties": {
         "copilotCompact.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable rewriting detected conversation-compaction requests from /responses to /responses/compact."
+          "markdownDescription": "启用后，将识别到的会话压缩请求从 `/responses` 改写到 `/responses/compact`。"
         },
         "copilotCompact.targetHosts": {
           "type": "array",
@@ -44,22 +44,22 @@
           "items": {
             "type": "string"
           },
-          "description": "Optional host allow-list. Empty means all hosts. Example: [\"newapi.boyweb.net\", \"openai.boyweb.net\"]."
+          "markdownDescription": "可选的目标域名白名单。留空表示匹配所有域名。示例：`[\"newapi.boyweb.net\", \"openai.boyweb.net\"]`。"
         },
         "copilotCompact.compactPathSuffix": {
           "type": "string",
           "default": "compact",
-          "description": "Path segment appended to /responses for compact requests. Default rewrites /v1/responses to /v1/responses/compact."
+          "markdownDescription": "追加到 `/responses` 后的路径片段。默认会把 `/v1/responses` 改写为 `/v1/responses/compact`。"
         },
         "copilotCompact.compactModelOverride": {
           "type": "string",
           "default": "",
-          "description": "Deprecated alias of copilotCompact.responsesCompactModel."
+          "markdownDescription": "已废弃：`copilotCompact.responsesCompactModel` 的兼容别名。建议保持为空。"
         },
         "copilotCompact.responsesCompactModel": {
           "type": "string",
           "default": "",
-          "description": "Optional explicit model name sent to /responses/compact. Empty means auto-fetch /models and choose a base model for the matched compact channel, e.g. gpt-5.5-xhigh -> gpt-5.5 for backend channel gpt-5.5-openai-compact."
+          "markdownDescription": "可选：显式指定发送到 `/responses/compact` 的模型名。留空时会自动请求 `/models`，匹配 compact 通道并发送基础模型。例如当前模型为 `gpt-5.5-xhigh`，后端通道为 `gpt-5.5-openai-compact` 时，请求模型会自动改为 `gpt-5.5`。如果你会在 `gpt-5.5`、`gpt-5.4` 等模型间切换，建议保持为空。"
         },
         "copilotCompact.rewriteMode": {
           "type": "string",
@@ -69,10 +69,10 @@
             "allResponses"
           ],
           "enumDescriptions": [
-            "Only rewrite requests that match Copilot's conversation-summary compaction prompt.",
-            "Rewrite every POST request whose URL ends with /responses. Use only for debugging."
+            "只改写匹配 Copilot 会话总结/压缩提示词的请求。",
+            "改写所有 URL 以 /responses 结尾的 POST 请求。仅建议调试时使用。"
           ],
-          "description": "Controls which /responses requests are rewritten."
+          "markdownDescription": "控制哪些 `/responses` 请求会被改写。"
         },
         "copilotCompact.logLevel": {
           "type": "string",
@@ -82,13 +82,18 @@
             "info",
             "debug"
           ],
-          "description": "Output verbosity. Logs never include request bodies or API keys."
+          "enumDescriptions": [
+            "关闭扩展输出日志。",
+            "输出关键改写日志。",
+            "输出更详细的调试日志。"
+          ],
+          "markdownDescription": "输出日志级别。日志不会打印请求体或 API Key。"
         }
       }
     }
   },
   "scripts": {
     "package": "npx --yes @vscode/vsce package --no-dependencies",
-    "test": "node ./test/compactDetector.test.js && node ./test/modelResolver.test.js && node ./test/compactionAdapter.test.js && node ./test/fetchPatch.test.js"
+    "test": "node ./test/compactDetector.test.js && node ./test/modelResolver.test.js && node ./test/compactionAdapter.test.js && node ./test/fetchPatch.test.js && node ./test/endToEnd.test.js"
   }
 }

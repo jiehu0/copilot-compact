@@ -72,7 +72,7 @@ function log(level, message, ...args) {
     return;
   }
   const suffix = args.length ? ` ${args.map(formatLogArg).join(" ")}` : "";
-  output?.appendLine(`[${new Date().toISOString()}] ${message}${suffix}`);
+  output?.appendLine(`[${formatLocalTimestamp()}] ${message}${suffix}`);
 }
 
 function formatLogArg(value) {
@@ -84,6 +84,23 @@ function formatLogArg(value) {
   } catch {
     return String(value);
   }
+}
+
+function formatLocalTimestamp(date = new Date()) {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const offsetSign = offsetMinutes >= 0 ? "+" : "-";
+  const absOffsetMinutes = Math.abs(offsetMinutes);
+  const offsetHours = Math.floor(absOffsetMinutes / 60);
+  const offsetRemainderMinutes = absOffsetMinutes % 60;
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`,
+    `${offsetSign}${pad(offsetHours)}:${pad(offsetRemainderMinutes)}`,
+  ].join(" ");
+}
+
+function pad(value, width = 2) {
+  return String(value).padStart(width, "0");
 }
 
 module.exports = {
