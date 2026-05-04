@@ -26,6 +26,7 @@ function detectCompactRequest(value) {
   const instructions = normalizeText(request.instructions);
   const inputText = collectInputText(request.input).join("\n");
   const allText = `${instructions}\n${inputText}`.toLowerCase();
+  const hasTools = Array.isArray(request.tools) && request.tools.length > 0;
 
   if (Array.isArray(request.input)) {
     score += 1;
@@ -37,7 +38,7 @@ function detectCompactRequest(value) {
     reasons.push("streaming");
   }
 
-  if (!Array.isArray(request.tools) || request.tools.length === 0) {
+  if (!hasTools) {
     score += 1;
     reasons.push("no-tools");
   }
@@ -80,8 +81,9 @@ function detectCompactRequest(value) {
     reasons.push("continuation-summary-language");
   }
 
+  const hasSummarySignal = reasons.some((r) => r.includes("summary") || r.includes("conversation-history"));
   return {
-    isCompact: score >= 7 && reasons.some((r) => r.includes("summary") || r.includes("conversation-history")),
+    isCompact: !hasTools && score >= 7 && hasSummarySignal,
     score,
     reasons,
   };

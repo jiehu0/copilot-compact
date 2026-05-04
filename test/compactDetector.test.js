@@ -50,6 +50,32 @@ const normalBody = {
   tools: [{ type: "function", name: "read_file" }],
 };
 
+const normalBodyWithHistoricalCompactPrompt = {
+  model: "gpt-5.5-xhigh",
+  input: [
+    {
+      role: "user",
+      type: "message",
+      content: [
+        {
+          type: "input_text",
+          text: "Summarize the conversation history so far, paying attention to important code and decisions.",
+        },
+      ],
+      status: "completed",
+    },
+    {
+      role: "user",
+      type: "message",
+      content: [{ type: "input_text", text: "现在继续帮我写代码。" }],
+      status: "incomplete",
+    },
+  ],
+  stream: true,
+  instructions: "You are an expert AI programming assistant.",
+  tools: [{ type: "function", name: "read_file" }],
+};
+
 assert.strictEqual(isResponsesEndpoint("https://newapi.boyweb.net/v1/responses"), true);
 assert.strictEqual(isResponsesEndpoint("https://newapi.boyweb.net/v1/responses/compact"), false);
 assert.strictEqual(
@@ -68,5 +94,12 @@ assert.ok(compact.reasons.includes("copilot-summary-user-prompt"));
 
 const normal = detectCompactRequest(JSON.stringify(normalBody));
 assert.strictEqual(normal.isCompact, false, JSON.stringify(normal));
+
+const normalWithHistoricalCompactPrompt = detectCompactRequest(JSON.stringify(normalBodyWithHistoricalCompactPrompt));
+assert.strictEqual(
+  normalWithHistoricalCompactPrompt.isCompact,
+  false,
+  JSON.stringify(normalWithHistoricalCompactPrompt)
+);
 
 console.log("compactDetector tests passed");
